@@ -1,4 +1,4 @@
-=====TRAFFIC LIGHT FSM====
+===🚦TRAFFIC LIGHT FSM===
 
 This folder contains a program that simulates a traffic light system 
 with a pedestrian crossing button using a finite state machine(FSM). The
