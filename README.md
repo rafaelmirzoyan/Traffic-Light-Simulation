@@ -1,4 +1,5 @@
 ===🚦TRAFFIC LIGHT FSM===
+**Author**: Rafael Mirzoyan
 
 This folder contains a program that simulates a traffic light system 
 with a pedestrian crossing button using a finite state machine(FSM). The
