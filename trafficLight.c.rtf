@@ -1,0 +1,250 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;\f1\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red13\green14\blue17;\red233\green240\blue254;}
+{\*\expandedcolortbl;;\cssrgb\c5882\c6667\c8235;\cssrgb\c92941\c95294\c99608;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs32 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 #include <ncurses.h>\
+#include <time.h>\
+#include <string.h>\
+#include <unistd.h>\
+\
+// State definitions\
+typedef enum \{\
+    START,\
+    GREEN_NO_PED,\
+    GREEN_PED_WAIT,\
+    YELLOW,\
+    RED,\
+    EXIT\
+\} states_t;\
+\
+// Global variables\
+states_t g_state;\
+states_t g_next_state;\
+char sim_started = 0;\
+char pedestrian_requested = 0;\
+\
+// Timing constants (in seconds)\
+int GREEN_TIME = 30;\
+int YELLOW_TIME = 5;\
+int RED_TIME = 20;\
+int PEDESTRIAN_DELAY = 10; // Minimum time before transition after pedestrian press\
+\
+time_t g_time;\
+time_t state_start_time;\
+time_t pedestrian_press_time;\
+\
+// NCurses initialization\
+void init_ncurses() \{\
+    initscr();\
+    cbreak();\
+    noecho();\
+    scrollok(stdscr, TRUE);\
+    nodelay(stdscr, TRUE);\
+    keypad(stdscr, TRUE);\
+    set_escdelay(0);\
+\}\
+\
+// FSM initialization\
+void init_fsm() \{\
+    g_state = START;\
+    g_next_state = START;\
+    init_ncurses();\
+    g_time = time(NULL);\
+    state_start_time = g_time;\
+\}\
+\
+// State functions\
+void state_start() \{\
+    printw("=== TRAFFIC LIGHT WITH PEDESTRIAN BUTTON ===\\n");\
+    printw("Press 's' to start simulation\\n");\
+    printw("Press 'p' during green light for pedestrian crossing\\n");\
+    printw("Press 'e' to exit simulation\\n");\
+    printw("\\nFeatures:\\n");\
+    printw("- Vehicles have priority most of the time\\n");\
+    printw("- Pedestrians can request crossing during green light\\n");\
+    printw("- Minimum 10-second delay before pedestrian crossing\\n");\
+    printw("- Normal cycle: Green(%ds) \uc0\u8594  Yellow(%ds) \u8594  Red(%ds)\\n", \
+           GREEN_TIME, YELLOW_TIME, RED_TIME);\
+    printw("\\nWaiting for simulation to start...\\n");\
+\}\
+\
+void state_green_no_ped() \{\
+    time_t elapsed = g_time - state_start_time;\
+    time_t remaining = GREEN_TIME - elapsed;\
+    \
+    printw("=== GREEN LIGHT - VEHICLES GO ===\\n");\
+    printw("Status: Cars moving, pedestrians waiting\\n");\
+    printw("Time in state: %lds | Remaining: %lds\\n", elapsed, remaining);\
+    \
+    if (pedestrian_requested) \{\
+        time_t wait_time = g_time - pedestrian_press_time;\
+        time_t time_until_transition = PEDESTRIAN_DELAY - wait_time;\
+        \
+        printw("PEDESTRIAN REQUESTED - Crossing in: %lds\\n", \
+               time_until_transition > 0 ? time_until_transition : 0);\
+    \} else \{\
+        printw("Press 'p' for pedestrian crossing\\n");\
+    \}\
+    printw("-----------------------------------\\n");\
+\}\
+\
+void state_green_ped_wait() \{\
+    time_t wait_elapsed = g_time - pedestrian_press_time;\
+    time_t time_until_yellow = PEDESTRIAN_DELAY - wait_elapsed;\
+    \
+    printw("=== GREEN LIGHT - PEDESTRIANS WAITING ===\\n");\
+    printw("Status: Pedestrian crossing scheduled\\n");\
+    printw("Transition to YELLOW in: %lds\\n", time_until_yellow);\
+    printw("Vehicles finishing current movement\\n");\
+    printw("-----------------------------------\\n");\
+\}\
+\
+void state_yellow() \{\
+    time_t elapsed = g_time - state_start_time;\
+    time_t remaining = YELLOW_TIME - elapsed;\
+    \
+    printw("=== YELLOW LIGHT - CAUTION ===\\n");\
+    printw("Status: Vehicles stopping, pedestrians preparing\\n");\
+    printw("Time in state: %lds | Remaining: %lds\\n", elapsed, remaining);\
+    printw("-----------------------------------\\n");\
+\}\
+\
+void state_red() \{\
+    time_t elapsed = g_time - state_start_time;\
+    time_t remaining = RED_TIME - elapsed;\
+    \
+    printw("=== RED LIGHT - PEDESTRIANS CROSS ===\\n");\
+    printw("Status: Vehicles stopped, pedestrians crossing\\n");\
+    printw("Time in state: %lds | Remaining: %lds\\n", elapsed, remaining);\
+    \
+    if (pedestrian_requested) \{\
+        printw("Pedestrian request fulfilled\\n");\
+        pedestrian_requested = 0; // Reset pedestrian request\
+    \}\
+    printw("-----------------------------------\\n");\
+\}\
+\
+int main(int argc, char *argv[]) \{\
+    // Handle command line arguments\
+    if (argc > 1) \{\
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) \{\
+            printf("Traffic Light with Pedestrian Button Simulation\\n");\
+            printf("Description: A finite state machine simulation with pedestrian crossing requests\\n");\
+            printf("\\nUsage: %s [options]\\n", argv[0]);\
+            printf("Options:\\n");\
+            printf(" -h, --help    Show this help message and exit\\n");\
+            printf(" -f, --fast    Run a faster simulation (shorter light durations)\\n");\
+            printf("\\nUser Inputs During Simulation:\\n");\
+            printf(" 's' : START simulation\\n");\
+            printf(" 'p' : During green light, request pedestrian crossing\\n");\
+            printf(" 'e' : EXIT simulation\\n");\
+            return 0;\
+        \}\
+        else if (strcmp(argv[1], "--fast") == 0 || strcmp(argv[1], "-f") == 0) \{\
+            GREEN_TIME = 10;\
+            YELLOW_TIME = 2;\
+            RED_TIME = 8;\
+            PEDESTRIAN_DELAY = 3;\
+        \}\
+    \}\
+\
+    // Initialize the finite state machine\
+    init_fsm();\
+    \
+    while(1) \{\
+        // Get keyboard input\
+        int key = getch();\
+        g_time = time(NULL);\
+        time_t elapsed_time = g_time - state_start_time;\
+\
+        // Handle global inputs\
+        if (key == 's' && !sim_started) \{\
+            sim_started = 1;\
+            g_next_state = GREEN_NO_PED;\
+            state_start_time = g_time;\
+        \}\
+        \
+        if (key == 'e') \{\
+            g_next_state = EXIT;\
+        \}\
+\
+        // Handle pedestrian button press during green light\
+        if (key == 'p' && sim_started && \
+            (g_state == GREEN_NO_PED || g_next_state == GREEN_NO_PED)) \{\
+            if (!pedestrian_requested) \{\
+                pedestrian_requested = 1;\
+                pedestrian_press_time = g_time;\
+                printw("\\n>>> Pedestrian button pressed! Crossing scheduled.\\n");\
+            \}\
+        \}\
+\
+        // Update state\
+        g_state = g_next_state;\
+\
+        // Clear screen and display current state\
+        clear();\
+\
+        switch(g_state) \{\
+            case START:\
+                state_start();\
+                if (sim_started) \{\
+                    state_start_time = g_time;\
+                    g_next_state = GREEN_NO_PED;\
+                \}\
+                break;\
+\
+            case GREEN_NO_PED:\
+                state_green_no_ped();\
+                \
+                // Check for pedestrian-triggered transition\
+                if (pedestrian_requested) \{\
+                    time_t wait_elapsed = g_time - pedestrian_press_time;\
+                    if (wait_elapsed >= PEDESTRIAN_DELAY) \{\
+                        state_start_time = g_time;\
+                        g_next_state = YELLOW;\
+                    \}\
+                \}\
+                // Normal timeout\
+                else if (elapsed_time >= GREEN_TIME) \{\
+                    state_start_time = g_time;\
+                    g_next_state = YELLOW;\
+                \}\
+                break;\
+\
+            case YELLOW:\
+                state_yellow();\
+                if (elapsed_time >= YELLOW_TIME) \{\
+                    state_start_time = g_time;\
+                    g_next_state = RED;\
+                \}\
+                break;\
+\
+            case RED:\
+                state_red();\
+                if (elapsed_time >= RED_TIME) \{\
+                    state_start_time = g_time;\
+                    g_next_state = GREEN_NO_PED;\
+                \}\
+                break;\
+\
+            case EXIT:\
+                endwin();\
+                printf("Simulation ended. Thank you!\\n");\
+                return 0;\
+                break;\
+        \}\
+\
+        refresh();\
+        usleep(100000); // 100ms delay to prevent excessive CPU usage\
+    \}\
+\
+    endwin();\
+    return 0;\
+\}
+\f1\fs26 \cf2 \cb1 \strokec2 \
+}
